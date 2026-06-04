@@ -1,0 +1,141 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Functions ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Role verification (AdminConcepts)
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/userProfiles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role == "Admin"
+      );
+    }
+
+    function isStaffOrAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/userProfiles/$(request.auth.uid))
+      );
+    }
+
+    // --- Gym Item Verification ---
+    function isValidGymItem(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 200 &&
+             data.brand is string && data.brand.size() <= 200 &&
+             data.serial is string && data.serial.size() <= 200 &&
+             data.category is string && data.category.size() <= 100 &&
+             data.condition is string && (data.condition == "Good" || data.condition == "In Repairs" || data.condition == "Broken") &&
+             data.location is string && data.location.size() <= 100 &&
+             data.totalStock is number && data.totalStock >= 0 &&
+             data.updatedAt is string;
+    }
+
+    match /gymItems/{itemId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(itemId) && isValidGymItem(incoming()) && incoming().id == itemId;
+      allow update: if isSignedIn() && isValidGymItem(incoming()) && (
+        // Admin or staff can modify items, but require immutable fields
+        incoming().id == existing().id &&
+        (
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'brand', 'serial', 'category', 'condition', 'location', 'totalStock', 'updatedAt', 'imageUrl', 'qrCodeUrl', 'description'])
+        )
+      );
+      allow delete: if isSignedIn();
+    }
+
+    // --- Maintenance Entries ---
+    function isValidMaintenanceEntry(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.itemId is string && data.itemId.size() <= 128 &&
+             data.itemName is string && data.itemName.size() <= 200 &&
+             data.nextServiceDate is string &&
+             data.maintenanceType is string && data.maintenanceType.size() <= 200 &&
+             data.status is string && (data.status == "Selesai" || data.status == "Mendatang");
+    }
+
+    match /maintenanceSchedule/{entryId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(entryId) && isValidMaintenanceEntry(incoming()) && incoming().id == entryId;
+      allow update: if isSignedIn() && isValidMaintenanceEntry(incoming()) && (
+        incoming().id == existing().id &&
+        incoming().itemId == existing().itemId &&
+        (
+          incoming().diff(existing()).affectedKeys().hasOnly(['itemName', 'nextServiceDate', 'maintenanceType', 'status'])
+        )
+      );
+      allow delete: if isSignedIn();
+    }
+
+    // --- Stock Movements Logs ---
+    function isValidStockLog(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.timestamp is string &&
+             data.type is string && (data.type == "Masuk" || data.type == "Keluar") &&
+             data.itemId is string && data.itemId.size() <= 128 &&
+             data.itemName is string && data.itemName.size() <= 200 &&
+             data.quantity is number && data.quantity > 0 &&
+             data.userEmail is string && data.userEmail.size() <= 200 &&
+             data.userName is string && data.userName.size() <= 200 &&
+             data.destinationOrSource is string && data.destinationOrSource.size() <= 200;
+    }
+
+    match /stockLogs/{logId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(logId) && isValidStockLog(incoming()) && incoming().id == logId;
+      allow update: if false; // Logs are immutable, they cannot be updated
+      allow delete: if isSignedIn();
+    }
+
+    // --- User Roles and Profiles ---
+    function isValidUserProfile(data) {
+      return data.uid is string && data.uid.size() <= 128 &&
+             data.email is string && data.email.size() <= 200 &&
+             data.role is string && (data.role == "Admin" || data.role == "Staff");
+    }
+
+    match /userProfiles/{uid} {
+      allow read: if isSignedIn();
+      // Allow users to bootstrap their profiles
+      allow create: if isSignedIn() && isOwner(uid) && isValidUserProfile(incoming()) && incoming().uid == uid;
+      // Allow profile edits (but prevent self role elevation by normal staff)
+      allow update: if isSignedIn() && isOwner(uid) && isValidUserProfile(incoming()) && (
+        incoming().uid == existing().uid &&
+        incoming().email == existing().email &&
+        (
+          // Staff cannot change their own role, admins can.
+          // If role is unchanged:
+          (incoming().role == existing().role && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL'])) ||
+          // Admin override:
+          isAdmin()
+        )
+      );
+      allow delete: if isAdmin();
+    }
+
+  }
+}

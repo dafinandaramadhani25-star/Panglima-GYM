@@ -1,0 +1,6 @@
+{
+  "name": "Panglima GYM",
+  "description": "Sistem manajemen inventaris dan stok barang gudang peralatan gym komersial GymStock Pro. Mengusung desain gelap yang elegan, simpel, dan minimalis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

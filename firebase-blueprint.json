@@ -1,0 +1,85 @@
+{
+  "entities": {
+    "gymItem": {
+      "title": "Gym Equipment Item",
+      "description": "Represents a single piece of commercial gym equipment in the stock database.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "brand": { "type": "string" },
+        "serial": { "type": "string" },
+        "category": { "type": "string" },
+        "condition": { "type": "string", "enum": ["Good", "In Repairs", "Broken"] },
+        "location": { "type": "string" },
+        "totalStock": { "type": "number" },
+        "imageUrl": { "type": "string" },
+        "qrCodeUrl": { "type": "string" },
+        "description": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "brand", "serial", "category", "condition", "location", "totalStock", "updatedAt"]
+    },
+    "maintenanceEntry": {
+      "title": "Maintenance Tracker Entry",
+      "description": "Represents a maintenance schedule event or log for a piece of equipment.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "itemId": { "type": "string" },
+        "itemName": { "type": "string" },
+        "nextServiceDate": { "type": "string" },
+        "maintenanceType": { "type": "string" },
+        "status": { "type": "string", "enum": ["Selesai", "Mendatang"] }
+      },
+      "required": ["id", "itemId", "itemName", "nextServiceDate", "maintenanceType", "status"]
+    },
+    "stockLog": {
+      "title": "Stock In Out Movement Log",
+      "description": "Chronological item stock log of movements.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "type": { "type": "string", "enum": ["Masuk", "Keluar"] },
+        "itemId": { "type": "string" },
+        "itemName": { "type": "string" },
+        "quantity": { "type": "number" },
+        "userEmail": { "type": "string" },
+        "userName": { "type": "string" },
+        "destinationOrSource": { "type": "string" }
+      },
+      "required": ["id", "timestamp", "type", "itemId", "itemName", "quantity", "userEmail", "userName", "destinationOrSource"]
+    },
+    "userProfile": {
+      "title": "User Profile Concept",
+      "description": "Stores user roles and privileges.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["Admin", "Staff"] }
+      },
+      "required": ["uid", "email", "role"]
+    }
+  },
+  "firestore": {
+    "/gymItems/{itemId}": {
+      "schema": "gymItem",
+      "description": "Commercial gym items inventory"
+    },
+    "/maintenanceSchedule/{entryId}": {
+      "schema": "maintenanceEntry",
+      "description": "Equipment schedules maintenance logs"
+    },
+    "/stockLogs/{logId}": {
+      "schema": "stockLog",
+      "description": "Stock inventory movement logs"
+    },
+    "/userProfiles/{uid}": {
+      "schema": "userProfile",
+      "description": "Role-based access details for personnel"
+    }
+  }
+}
