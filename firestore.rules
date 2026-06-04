@@ -119,7 +119,7 @@ service cloud.firestore {
     }
 
     match /userProfiles/{uid} {
-      allow read: if isSignedIn();
+      allow read: if true;
       // Allow users to bootstrap their profiles
       allow create: if isSignedIn() && isOwner(uid) && isValidUserProfile(incoming()) && incoming().uid == uid;
       // Allow profile edits (but prevent self role elevation by normal staff)

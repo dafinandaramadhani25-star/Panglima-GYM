@@ -54,8 +54,14 @@ export interface FirestoreErrorInfo {
   };
 }
 
-// 1. Initialize Firebase Safety Shield
-export const isFirebaseConfigured = !!(firebaseConfig && firebaseConfig.apiKey && firebaseConfig.apiKey !== "");
+// 1. Initialize Firebase Safety Shield (Allows manual override to high-fidelity offline mode if Firebase crashes on custom client domains)
+export const isFirebaseConfigured = !!(
+  firebaseConfig && 
+  firebaseConfig.apiKey && 
+  firebaseConfig.apiKey !== "" && 
+  typeof window !== 'undefined' && 
+  localStorage.getItem('disable_firebase_override') !== 'true'
+);
 
 let appInstance: any = null;
 let dbInstance: any = null;

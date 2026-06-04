@@ -53,6 +53,11 @@ export default function KatalogView({ items, onAddItem, onEditItem, onDeleteItem
   const [stockQty, setStockQty] = useState(1);
   const [stockReason, setStockReason] = useState('');
 
+  // New modal and validation/error feedback state
+  const [itemToDelete, setItemToDelete] = useState<GymItem | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [stockError, setStockError] = useState<{[key: string]: string}>({});
+
   // 1. Get unique categories
   const categories = useMemo(() => {
     const list = new Set(items.map(item => item.category));
@@ -87,6 +92,7 @@ export default function KatalogView({ items, onAddItem, onEditItem, onDeleteItem
     setFormStock(1);
     setFormDescription('');
     setFormImageUrl('');
+    setValidationError(null);
     setIsModalOpen(true);
   };
 
@@ -104,25 +110,24 @@ export default function KatalogView({ items, onAddItem, onEditItem, onDeleteItem
     setFormStock(item.totalStock);
     setFormDescription(item.description || '');
     setFormImageUrl(item.imageUrl || '');
+    setValidationError(null);
     setIsModalOpen(true);
   };
 
   // Safe delete handler
-  const handleDeleteClick = (e: React.MouseEvent, id: string) => {
+  const handleDeleteClick = (e: React.MouseEvent, item: GymItem) => {
     e.stopPropagation();
-    if (confirm('Apakah Anda yakin ingin menghapus barang ini dari katalog?')) {
-      onDeleteItem(id);
-      if (expandedRowId === id) setExpandedRowId(null);
-    }
+    setItemToDelete(item);
   };
 
   // Submit Handler
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName || !formBrand || !formSerial || !formLocation) {
-      alert('Harap isi semua kolom wajib!');
+      setValidationError('Harap isi semua kolom wajib!');
       return;
     }
+    setValidationError(null);
 
     if (isEditing && editingItem) {
       onEditItem({
@@ -387,7 +392,7 @@ export default function KatalogView({ items, onAddItem, onEditItem, onDeleteItem
                               <Edit2 className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={(e) => handleDeleteClick(e, item.id)}
+                              onClick={(e) => handleDeleteClick(e, item)}
                               title="Hapus barang"
                               className="p-1.5 text-[#8E8E8E] hover:text-red-400 hover:bg-red-500/5 rounded-lg transition-colors cursor-pointer"
                             >
@@ -469,9 +474,21 @@ export default function KatalogView({ items, onAddItem, onEditItem, onDeleteItem
                                       </div>
                                     </div>
 
+                                    {stockError[item.id] && (
+                                      <div className="mb-2 p-2 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] flex items-center gap-1">
+                                        <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+                                        <span>{stockError[item.id]}</span>
+                                      </div>
+                                    )}
+
                                     <div className="flex gap-2">
                                       <button
                                         onClick={() => {
+                                          setStockError(prev => {
+                                            const updated = { ...prev };
+                                            delete updated[item.id];
+                                            return updated;
+                                          });
                                           onStockInOut(item.id, 'Masuk', stockQty, stockReason || 'Re-stock gudang');
                                           setStockReason('');
                                         }}
@@ -482,9 +499,17 @@ export default function KatalogView({ items, onAddItem, onEditItem, onDeleteItem
                                       <button
                                         onClick={() => {
                                           if (item.totalStock < stockQty) {
-                                            alert('Kesalahan: Jumlah stok keluar melebihi sisa stok terdaftar!');
+                                            setStockError(prev => ({
+                                              ...prev,
+                                              [item.id]: 'Jumlah stok keluar melebihi sisa stok terdaftar!'
+                                            }));
                                             return;
                                           }
+                                          setStockError(prev => {
+                                            const updated = { ...prev };
+                                            delete updated[item.id];
+                                            return updated;
+                                          });
                                           onStockInOut(item.id, 'Keluar', stockQty, stockReason || 'Pengambilan unit');
                                           setStockReason('');
                                         }}
@@ -543,6 +568,12 @@ export default function KatalogView({ items, onAddItem, onEditItem, onDeleteItem
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4 text-xs font-sans">
+                  {validationError && (
+                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                      <span>{validationError}</span>
+                    </div>
+                  )}
                   
                   {/* Name */}
                   <div>
@@ -684,6 +715,60 @@ export default function KatalogView({ items, onAddItem, onEditItem, onDeleteItem
                 </button>
               </div>
 
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Custom Confirmation Dialog for Catalog Item Deletion */}
+      <AnimatePresence>
+        {itemToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#121212] border border-[#2A2A2A] rounded-xl p-6 shadow-[0_0_50px_rgba(0,0,0,0.8)] relative overflow-hidden font-sans"
+            >
+              <div className="flex items-center gap-3 mb-4 text-red-500 pb-2 border-b border-[#2A2A2A]">
+                <AlertCircle className="w-5 h-5 text-red-550 animate-pulse" />
+                <h3 className="text-xs font-bold text-white uppercase font-mono tracking-widest">Hapus Barang</h3>
+              </div>
+
+              <div className="space-y-3 text-xs text-[#8E8E8E] mb-6 leading-relaxed">
+                <p>
+                  Apakah Anda yakin ingin menghapus <strong className="text-white font-semibold">{itemToDelete.name}</strong> dari katalog barang?
+                </p>
+                <div className="p-2.5 bg-red-500/5 border border-red-500/10 rounded-lg flex items-start gap-2">
+                  <span className="text-red-400 font-mono font-bold uppercase text-[9px] tracking-wider shrink-0 mt-0.5">Peringatan:</span>
+                  <p className="text-[10px] text-[#8E8E8E]">
+                    Tindakan ini akan menghapus data unit barang ini secara permanen dari sistem inventaris Panglima GYM.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 text-xs font-sans">
+                <button
+                  type="button"
+                  onClick={() => setItemToDelete(null)}
+                  className="flex-1 py-2.5 border border-gray-800 hover:border-gray-750 bg-transparent text-[#8E8E8E] hover:text-white rounded-xl cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDeleteItem(itemToDelete.id);
+                    if (expandedRowId === itemToDelete.id) {
+                      setExpandedRowId(null);
+                    }
+                    setItemToDelete(null);
+                  }}
+                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-md cursor-pointer transition-colors"
+                >
+                  Ya, Hapus Barang
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

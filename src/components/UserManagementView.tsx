@@ -10,42 +10,84 @@ import {
   X,
   AlertTriangle,
   FileMinus,
-  Trash2
+  Trash2,
+  Pencil,
+  Lock
 } from 'lucide-react';
 import { UserProfile } from '../types';
 
 interface UserManagementViewProps {
-  currentUser: { email: string; displayName: string };
+  currentUser: { email: string; displayName: string; role?: 'Admin' | 'Staff' };
   users: UserProfile[];
-  onAddUser: (profile: Omit<UserProfile, 'uid'>) => void;
-  onModifyRole: (uid: string, role: 'Admin' | 'Staff') => void;
+  onAddUser: (profile: Omit<UserProfile, 'uid'> & { password?: string }) => void;
+  onUpdateUser: (uid: string, updates: Partial<UserProfile> & { password?: string }) => void;
   onDeleteUser: (uid: string) => void;
 }
 
-export default function UserManagementView({ currentUser, users, onAddUser, onModifyRole, onDeleteUser }: UserManagementViewProps) {
+export default function UserManagementView({ currentUser, users, onAddUser, onUpdateUser, onDeleteUser }: UserManagementViewProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  
   const [newEmail, setNewEmail] = useState('');
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState<'Admin' | 'Staff'>('Staff');
+  const [newPassword, setNewPassword] = useState('panglimagym2026');
+
+  const [profileToDelete, setProfileToDelete] = useState<UserProfile | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  const openAddModal = () => {
+    setEditingUser(null);
+    setNewEmail('');
+    setNewName('');
+    setNewRole('Staff');
+    setNewPassword('panglimagym2026');
+    setValidationError(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (profile: UserProfile) => {
+    setEditingUser(profile);
+    setNewEmail(profile.email || '');
+    setNewName(profile.displayName || '');
+    setNewRole(profile.role);
+    setNewPassword((profile as any).password || 'panglimagym2026');
+    setValidationError(null);
+    setIsModalOpen(true);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEmail || !newName) {
-      alert('Harap isi nama dan alamat email!');
+      setValidationError('Harap isi nama dan alamat email resmi!');
       return;
     }
+    setValidationError(null);
 
-    onAddUser({
-      email: newEmail,
-      displayName: newName,
-      photoURL: null,
-      role: newRole
-    });
+    if (editingUser) {
+      // Edit/Update Mode
+      onUpdateUser(editingUser.uid, {
+        displayName: newName,
+        role: newRole,
+        password: newPassword
+      });
+    } else {
+      // Create/Add Mode
+      onAddUser({
+        email: newEmail,
+        displayName: newName,
+        photoURL: null,
+        role: newRole,
+        password: newPassword
+      });
+    }
 
     // Reset
     setNewEmail('');
     setNewName('');
     setNewRole('Staff');
+    setNewPassword('panglimagym2026');
+    setEditingUser(null);
     setIsModalOpen(false);
   };
 
@@ -60,7 +102,7 @@ export default function UserManagementView({ currentUser, users, onAddUser, onMo
         </div>
         
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={openAddModal}
           className="bg-[#00C853] hover:bg-[#00E676] text-black text-xs font-semibold px-4 py-3 rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 shrink-0 cursor-pointer"
         >
           <UserPlus className="w-4.5 h-4.5" />
@@ -119,7 +161,7 @@ export default function UserManagementView({ currentUser, users, onAddUser, onMo
                           <select
                             value={profile.role}
                             disabled={isSelf}
-                            onChange={(e) => onModifyRole(profile.uid, e.target.value as 'Admin' | 'Staff')}
+                            onChange={(e) => onUpdateUser(profile.uid, { role: e.target.value as 'Admin' | 'Staff' })}
                             className={`px-2 py-1 border text-[10px] font-mono leading-none rounded cursor-pointer focus:outline-none transition-colors ${
                               profile.role === 'Admin'
                                 ? 'bg-[#00C853]/10 border-[#00C853]/30 text-emerald-400'
@@ -133,18 +175,23 @@ export default function UserManagementView({ currentUser, users, onAddUser, onMo
                       </td>
 
                       <td className="py-4 px-5 text-right">
-                        <button
-                          disabled={isSelf}
-                          onClick={() => {
-                            if (confirm(`Yakin ingin mencabut hak akses ${profile.displayName}?`)) {
-                              onDeleteUser(profile.uid);
-                            }
-                          }}
-                          className="p-1.5 text-[#8E8E8E] hover:text-red-400 hover:bg-red-500/5 rounded-lg disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
-                          title="Hapus Hak Akses"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => openEditModal(profile)}
+                            className="p-1.5 text-[#8E8E8E] hover:text-emerald-400 hover:bg-emerald-500/5 rounded-lg transition-all cursor-pointer"
+                            title="Edit Profil & Password"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            disabled={isSelf}
+                            onClick={() => setProfileToDelete(profile)}
+                            className="p-1.5 text-[#8E8E8E] hover:text-red-400 hover:bg-red-500/5 rounded-lg disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
+                            title="Hapus Hak Akses"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -202,8 +249,10 @@ export default function UserManagementView({ currentUser, users, onAddUser, onMo
               <div>
                 <div className="flex items-center justify-between mb-6 pb-4 border-b border-[#2A2A2A]">
                   <div className="flex items-center gap-2">
-                    <UserPlus className="w-5 h-5 text-emerald-400" />
-                    <h3 className="text-sm font-semibold text-white font-mono tracking-widest uppercase">Petugas Baru</h3>
+                    {editingUser ? <Pencil className="w-5 h-5 text-emerald-400" /> : <UserPlus className="w-5 h-5 text-emerald-400" />}
+                    <h3 className="text-sm font-semibold text-white font-mono tracking-widest uppercase">
+                      {editingUser ? 'Edit Petugas' : 'Petugas Baru'}
+                    </h3>
                   </div>
                   <button 
                     onClick={() => setIsModalOpen(false)}
@@ -214,6 +263,12 @@ export default function UserManagementView({ currentUser, users, onAddUser, onMo
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4 text-xs font-sans">
+                  {validationError && (
+                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
+                      <span>{validationError}</span>
+                    </div>
+                  )}
                   
                   {/* Name field */}
                   <div>
@@ -238,9 +293,28 @@ export default function UserManagementView({ currentUser, users, onAddUser, onMo
                       <input
                         type="email"
                         required
+                        disabled={!!editingUser}
                         value={newEmail}
                         onChange={(e) => setNewEmail(e.target.value)}
                         placeholder="thariq@panglimagym.com"
+                        className="w-full pl-9 pr-3 py-2.5 bg-[#1A1A1A] border border-[#2A2A2A] focus:border-[#00C853]/30 rounded-lg text-white font-sans disabled:opacity-50 disabled:cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Password field */}
+                  <div>
+                    <label className="block text-[#8E8E8E] font-mono uppercase tracking-wider mb-1">Password Masuk *</label>
+                    <div className="relative font-sans">
+                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500">
+                        <Lock className="w-4 h-4" />
+                      </span>
+                      <input
+                        type="text"
+                        required
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Masukkan password masuk"
                         className="w-full pl-9 pr-3 py-2.5 bg-[#1A1A1A] border border-[#2A2A2A] focus:border-[#00C853]/30 rounded-lg text-white font-sans"
                       />
                     </div>
@@ -276,10 +350,59 @@ export default function UserManagementView({ currentUser, users, onAddUser, onMo
                   onClick={handleSubmit}
                   className="flex-1 py-3 bg-[#00C853] hover:bg-[#00E676] text-black text-xs font-bold rounded-xl shadow-md cursor-pointer"
                 >
-                  Daftarkan Petugas
+                  {editingUser ? 'Simpan Perubahan' : 'Daftarkan Petugas'}
                 </button>
               </div>
 
+            </motion.div>
+          </div>
+        )}
+
+        {/* Custom Confirmation Dialog for User Access Deletion */}
+        {profileToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#121212] border border-[#2A2A2A] rounded-xl p-6 shadow-[0_0_50px_rgba(0,0,0,0.8)] relative overflow-hidden font-sans"
+            >
+              <div className="flex items-center gap-3 mb-4 text-red-500 pb-2 border-b border-[#2A2A2A]">
+                <AlertTriangle className="w-5 h-5 text-red-500 animate-pulse" />
+                <h3 className="text-xs font-bold text-white uppercase font-mono tracking-widest">Cabut Hak Akses</h3>
+              </div>
+
+              <div className="space-y-3 text-xs text-[#8E8E8E] mb-6 leading-relaxed">
+                <p>
+                  Apakah Anda yakin ingin mencabut hak akses otorisasi untuk <strong className="text-white font-semibold">{profileToDelete.displayName || profileToDelete.email}</strong>?
+                </p>
+                <div className="p-2.5 bg-red-500/5 border border-red-500/10 rounded-lg flex items-start gap-2">
+                  <span className="text-red-400 font-mono font-bold uppercase text-[9px] tracking-wider shrink-0 mt-0.5">Catatan:</span>
+                  <p className="text-[10px] text-[#8E8E8E]">
+                    Tindakan ini tidak dapat dibatalkan. Petugas ini tidak akan bisa login lagi ke sistem inventaris.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 text-xs font-sans">
+                <button
+                  type="button"
+                  onClick={() => setProfileToDelete(null)}
+                  className="flex-1 py-2.5 border border-gray-800 hover:border-gray-750 bg-transparent text-[#8E8E8E] hover:text-white rounded-xl cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDeleteUser(profileToDelete.uid);
+                    setProfileToDelete(null);
+                  }}
+                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-md cursor-pointer transition-colors"
+                >
+                  Ya, Cabut Akses
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

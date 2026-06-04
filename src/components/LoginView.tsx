@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Dumbbell, Lock, Mail, ChevronRight, AlertCircle, Sparkles } from 'lucide-react';
-import { isFirebaseConfigured, auth, googleProvider } from '../lib/firebase';
-import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { isFirebaseConfigured, auth, db } from '../lib/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 
 interface LoginViewProps {
-  onLoginSuccess: (user: { email: string; displayName: string }) => void;
+  onLoginSuccess: (user: { email: string; displayName: string; role?: 'Admin' | 'Staff' }) => void;
 }
 
 export default function LoginView({ onLoginSuccess }: LoginViewProps) {
@@ -24,54 +24,96 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     setLoading(true);
     setError(null);
 
+    // 1. First search in simulated / admin-defined local accounts
+    try {
+      const storedUsers = localStorage.getItem('gymstock_personnel');
+      const localProfiles: any[] = storedUsers ? JSON.parse(storedUsers) : [];
+      const matchedLocal = localProfiles.find(u => u.email?.toLowerCase() === email.toLowerCase());
+
+      if (matchedLocal) {
+        const storedPassword = matchedLocal.password || 'panglimagym2026';
+        if (storedPassword === password) {
+          onLoginSuccess({
+            email: matchedLocal.email,
+            displayName: matchedLocal.displayName || matchedLocal.email.split('@')[0],
+            role: matchedLocal.role || 'Staff'
+          });
+          setLoading(false);
+          return;
+        }
+      }
+
+      // 2. Search in online Firestore database profiles
+      if (isFirebaseConfigured && db) {
+        const { getDocs, collection } = await import('firebase/firestore');
+        const querySnapshot = await getDocs(collection(db, 'userProfiles'));
+        let firestoreProfile: any = null;
+        querySnapshot.forEach((docSnap) => {
+          const p = docSnap.data();
+          if (p.email?.toLowerCase() === email.toLowerCase()) {
+            firestoreProfile = p;
+          }
+        });
+
+        if (firestoreProfile) {
+          const storedPassword = firestoreProfile.password || 'panglimagym2026';
+          if (storedPassword === password) {
+            // Success! Cache profile in local storage for instant access
+            const currentLocal = localStorage.getItem('gymstock_personnel');
+            const parsedLocal: any[] = currentLocal ? JSON.parse(currentLocal) : [];
+            const filteredLocal = parsedLocal.filter(u => u.email?.toLowerCase() !== email.toLowerCase());
+            const updatedProfile = {
+              uid: firestoreProfile.uid,
+              email: firestoreProfile.email,
+              displayName: firestoreProfile.displayName,
+              photoURL: firestoreProfile.photoURL || null,
+              role: firestoreProfile.role || 'Staff',
+              password: storedPassword
+            };
+            localStorage.setItem('gymstock_personnel', JSON.stringify([...filteredLocal, updatedProfile]));
+
+            onLoginSuccess({
+              email: firestoreProfile.email,
+              displayName: firestoreProfile.displayName || email.split('@')[0],
+              role: firestoreProfile.role || 'Staff'
+            });
+            setLoading(false);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Custom profiles check failed, falling back to direct Firebase Auth:", err);
+    }
+
+    // 3. Fallback to direct Firebase Authentication
     if (isFirebaseConfigured && auth) {
       try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const u = userCredential.user;
+
+        // Retrieve or determine role
+        const storedUsers = localStorage.getItem('gymstock_personnel');
+        const localProfiles: any[] = storedUsers ? JSON.parse(storedUsers) : [];
+        const matched = localProfiles.find(p => p.email?.toLowerCase() === email.toLowerCase());
+        const role = matched?.role || 'Staff';
+
         onLoginSuccess({
           email: u.email || email,
-          displayName: u.displayName || u.email?.split('@')[0] || 'Operator',
+          displayName: u.displayName || matched?.displayName || u.email?.split('@')[0] || 'Operator',
+          role: role
         });
       } catch (err: any) {
         console.error(err);
-        setError(err.message || 'Gagal masuk. Silakan periksa kembali email & password Anda.');
+        setError('Email atau password salah. Silakan periksa kembali.');
         setLoading(false);
       }
     } else {
-      // High-fidelity fallback login
+      // Local fallback error when no custom credentials match
       setTimeout(() => {
-        onLoginSuccess({
-          email: email,
-          displayName: email === 'dafinandaramadhani25@gmail.com' ? 'Dafina Ramadhani' : email.split('@')[0],
-        });
+        setError('Email atau password tidak terdaftar atau password salah.');
         setLoading(false);
       }, 800);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setError(null);
-    setLoading(true);
-    if (isFirebaseConfigured && auth) {
-      try {
-        const result = await signInWithPopup(auth, googleProvider);
-        onLoginSuccess({
-          email: result.user.email || '',
-          displayName: result.user.displayName || 'Google Operator',
-        });
-      } catch (err: any) {
-        console.error(err);
-        setError(err.message || 'Gagal masuk menggunakan Google Sign-In.');
-        setLoading(false);
-      }
-    } else {
-      setTimeout(() => {
-        onLoginSuccess({
-          email: 'dafinandaramadhani25@gmail.com',
-          displayName: 'Dafina Ramadhani (Google Demo)',
-        });
-        setLoading(false);
-      }, 700);
     }
   };
 
@@ -116,16 +158,67 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         </div>
 
         {/* Error Notification */}
-        {error && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-2 text-sm text-red-200 animate-pulse"
-          >
-            <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-            <span className="leading-tight text-xs">{error}</span>
-          </motion.div>
-        )}
+        {error && (() => {
+          const isOperationNotAllowed = error.includes('operation-not-allowed') || 
+                                       error.includes('auth/operation_not_allowed') || 
+                                       error.includes('auth/operation-not-allowed');
+          
+          if (isOperationNotAllowed) {
+            return (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="mb-6 p-4 bg-red-950/40 border border-red-500/20 rounded-xl flex flex-col gap-3 text-xs text-red-200"
+              >
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5 animate-pulse" />
+                  <div className="space-y-1">
+                    <span className="font-bold text-white block">Metode Login Belum Diaktifkan di Firebase Console</span>
+                    <span className="leading-relaxed text-[#FF8A80] block text-[11px]">
+                      Firebase mengembalikan error: <code className="bg-red-950 px-1.5 py-0.5 rounded font-mono font-bold text-white">auth/operation-not-allowed</code>.
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="bg-[#140808] p-3 rounded-lg border border-red-500/10 space-y-2 text-[#E0E0E0] leading-relaxed text-[11px]">
+                  <span className="text-[10px] font-bold text-emerald-400 block uppercase tracking-wider font-mono">Langkah Mengaktifkan:</span>
+                  <ol className="list-decimal list-inside space-y-1.5 text-left text-gray-300">
+                    <li>Buka <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline font-bold">Firebase Console</a>.</li>
+                    <li>Pilih proyek Anda (<strong className="text-white">methodical-exchanger-9tgzl</strong>).</li>
+                    <li>Klik menu <strong className="text-white">Authentication</strong> &gt; tab <strong className="text-white">Sign-in method</strong>.</li>
+                    <li>Klik <strong className="text-white">Add new provider</strong>, pilih <strong className="text-white">Email/Password</strong>, aktifkan (<strong className="text-emerald-400">Enable</strong>), lalu simpan.</li>
+                    <li>Aktifkan juga provider <strong className="text-white">Google</strong> jika Anda ingin login dengan Google.</li>
+                  </ol>
+                </div>
+
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.setItem('disable_firebase_override', 'true');
+                      window.location.reload();
+                    }}
+                    className="w-full py-2.5 bg-[#00C853] hover:bg-[#00E676] text-black font-bold rounded-lg text-[10px] uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Masuk ke Mode Demo Sementara
+                  </button>
+                </div>
+              </motion.div>
+            );
+          }
+
+          return (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-2 text-sm text-red-200 animate-pulse"
+            >
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <span className="leading-tight text-xs">{error}</span>
+            </motion.div>
+          );
+        })()}
 
         {/* Form */}
         <form onSubmit={handleEmailLogin} className="space-y-4">
@@ -187,42 +280,6 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
             )}
           </button>
         </form>
-
-        {/* Divider */}
-        <div className="relative flex py-5 items-center justify-center">
-          <div className="flex-grow border-t border-[#2A2A2A]"></div>
-          <span className="flex-shrink mx-4 text-gray-500 text-[10px] uppercase font-mono tracking-wider">Atau Masuk dengan</span>
-          <div className="flex-grow border-t border-[#2A2A2A]"></div>
-        </div>
-
-        {/* Google Authentication Button */}
-        <button
-          type="button"
-          onClick={handleGoogleLogin}
-          disabled={loading}
-          className="w-full py-3 border border-[#2A2A2A] hover:border-gray-700 bg-[#1A1A1A] text-gray-300 hover:text-white font-medium rounded-xl text-sm transition-colors duration-200 flex items-center justify-center gap-2.5 cursor-pointer"
-        >
-          {/* Subtle Google Logo Icon */}
-          <svg className="w-4 h-4" viewBox="0 0 24 24">
-            <path
-              fill="currentColor"
-              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-            />
-            <path
-              fill="currentColor"
-              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-            />
-            <path
-              fill="currentColor"
-              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-            />
-            <path
-              fill="currentColor"
-              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-            />
-          </svg>
-          Google Sign-In
-        </button>
 
         {/* Demo Credentials Alert Helper */}
         <div className="mt-6 p-3 rounded-lg bg-[#00C853]/5 border border-emerald-500/15 text-center text-[11px] text-gray-400">

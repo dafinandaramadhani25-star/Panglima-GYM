@@ -16,7 +16,7 @@ export type SidebarTab = 'dashboard' | 'catalog' | 'maintenance' | 'logs' | 'use
 interface SidebarProps {
   currentTab: SidebarTab;
   onTabChange: (tab: SidebarTab) => void;
-  user: { email: string; displayName: string };
+  user: { email: string; displayName: string; role?: 'Admin' | 'Staff' };
   onLogout: () => void;
 }
 
@@ -26,7 +26,7 @@ export default function Sidebar({ currentTab, onTabChange, user, onLogout }: Sid
     { id: 'catalog' as SidebarTab, label: 'Katalog Barang', icon: Database },
     { id: 'maintenance' as SidebarTab, label: 'Jadwal Perawatan', icon: CalendarClock },
     { id: 'logs' as SidebarTab, label: 'Log Stok', icon: History },
-    { id: 'users' as SidebarTab, label: 'Manajemen User', icon: Users },
+    ...(user.role === 'Admin' ? [{ id: 'users' as SidebarTab, label: 'Manajemen User', icon: Users }] : []),
   ];
 
   return (
@@ -72,16 +72,29 @@ export default function Sidebar({ currentTab, onTabChange, user, onLogout }: Sid
       {/* User info / Status & Sign Out panel */}
       <div className="p-4 border-t border-[#2A2A2A] bg-[#121212] space-y-4">
         {/* Connection health indicator */}
-        <div className="flex items-center justify-between px-2 pt-1 font-mono">
-          <span className="text-[10px] uppercase text-[#8E8E8E] tracking-wider">Database Status</span>
-          {isFirebaseConfigured ? (
-            <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-mono">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live Cloud
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 text-[10px] text-amber-400 font-mono" title="Menggunakan LocalStorage">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Local Sync
-            </span>
+        <div className="flex flex-col gap-1.5 px-1 pt-1 font-mono">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[10px] uppercase text-[#8E8E8E] tracking-widest font-bold">Database</span>
+            {isFirebaseConfigured ? (
+              <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live Cloud
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-[10px] text-amber-400 font-mono" title="Menggunakan LocalStorage">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Local Sync
+              </span>
+            )}
+          </div>
+          {typeof window !== 'undefined' && localStorage.getItem('disable_firebase_override') === 'true' && (
+            <button
+              onClick={() => {
+                localStorage.removeItem('disable_firebase_override');
+                window.location.reload();
+              }}
+              className="mt-1 w-full text-center text-[9px] text-[#00C853] bg-emerald-500/10 hover:bg-emerald-500/20 py-1.5 rounded border border-emerald-500/20 font-bold tracking-tight uppercase hover:underline transition-all cursor-pointer"
+            >
+              Aktifkan Cloud Firebase
+            </button>
           )}
         </div>
 
@@ -92,7 +105,16 @@ export default function Sidebar({ currentTab, onTabChange, user, onLogout }: Sid
             {user.displayName ? user.displayName.charAt(0) : 'U'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-white truncate leading-tight">{user.displayName || 'Operator'}</p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-semibold text-white truncate">{user.displayName || 'Operator'}</span>
+              <span className={`text-[8px] font-mono font-bold uppercase px-1 rounded border ${
+                user.role === 'Admin' 
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+              }`}>
+                {user.role || 'Staff'}
+              </span>
+            </div>
             <p className="text-[10px] text-[#8E8E8E] truncate leading-tight font-mono mt-0.5">{user.email}</p>
           </div>
         </div>

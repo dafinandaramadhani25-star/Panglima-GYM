@@ -30,33 +30,36 @@ import UserManagementView from './components/UserManagementView';
 import LoginView from './components/LoginView';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
-const INITIAL_USERS: UserProfile[] = [
+const INITIAL_USERS: (UserProfile & { password?: string })[] = [
   {
     uid: 'user-1',
     email: 'dafinandaramadhani25@gmail.com',
     displayName: 'Dafina Ramadhani',
     photoURL: null,
-    role: 'Admin'
+    role: 'Admin',
+    password: 'panglimagym2026'
   },
   {
     uid: 'user-2',
     email: 'ahmad@gymstock.com',
     displayName: 'Ahmad Muzakir',
     photoURL: null,
-    role: 'Staff'
+    role: 'Staff',
+    password: 'staffpassword2026'
   },
   {
     uid: 'user-3',
     email: 'budi@gymstock.com',
     displayName: 'Budi Santoso',
     photoURL: null,
-    role: 'Staff'
+    role: 'Staff',
+    password: 'staffpassword22'
   }
 ];
 
 export default function App() {
   // 1. Auth states
-  const [user, setUser] = useState<{ email: string; displayName: string } | null>(null);
+  const [user, setUser] = useState<{ email: string; displayName: string; role?: 'Admin' | 'Staff' } | null>(null);
   const [authLoading, setAuthLoading] = useState(isFirebaseConfigured);
 
   // 2. Navigation states
@@ -90,38 +93,55 @@ export default function App() {
     if (isFirebaseConfigured && auth) {
       const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
         if (firebaseUser) {
+          // Look up user's role from personnel database
+          const storedUsers = localStorage.getItem('gymstock_personnel');
+          const localProfiles: any[] = storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS;
+          const matched = localProfiles.find(u => u.email?.toLowerCase() === firebaseUser.email?.toLowerCase());
+          const role = matched?.role || 'Staff';
+          const displayName = matched?.displayName || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Operator';
+
           const profile = {
             email: firebaseUser.email || 'operator@panglimagym.com',
-            displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Operator',
+            displayName: displayName,
+            role: role as 'Admin' | 'Staff'
           };
           setUser(profile);
           
           // Seed to personnel list if not exist
           setPersonnel((prev) => {
-            const exists = prev.some(u => u.email === profile.email);
-            if (!exists) {
-              const updated = [
-                ...prev,
-                {
-                  uid: firebaseUser.uid,
-                  email: profile.email,
-                  displayName: profile.displayName,
-                  photoURL: firebaseUser.photoURL || null,
-                  role: 'Staff'
-                }
-              ];
+            const hasCorrectUid = prev.some(u => u.email?.toLowerCase() === profile.email?.toLowerCase() && u.uid === firebaseUser.uid);
+            if (!hasCorrectUid) {
+              const existsByEmail = prev.some(u => u.email?.toLowerCase() === profile.email?.toLowerCase());
+              let updated;
+              if (existsByEmail) {
+                updated = prev.map(u => u.email?.toLowerCase() === profile.email?.toLowerCase() 
+                  ? { ...u, uid: firebaseUser.uid, displayName: profile.displayName, role: role as 'Admin' | 'Staff' } 
+                  : u
+                );
+              } else {
+                updated = [
+                  ...prev,
+                  {
+                    uid: firebaseUser.uid,
+                    email: profile.email,
+                    displayName: profile.displayName,
+                    photoURL: firebaseUser.photoURL || null,
+                    role: role as 'Admin' | 'Staff'
+                  }
+                ];
+              }
               localStorage.setItem('gymstock_personnel', JSON.stringify(updated));
               
-              // Seed to Firestore newly logging-in user
+              // Seed/sync to Firestore newly logging-in user under their real Firebase Auth UID
               if (db) {
                 const userDocRef = doc(db, 'userProfiles', firebaseUser.uid);
                 setDoc(userDocRef, {
                   uid: firebaseUser.uid,
                   email: profile.email,
                   displayName: profile.displayName,
-                  role: 'Staff'
+                  role: role as 'Admin' | 'Staff'
                 }).catch((err) => {
-                  console.warn("Could not sync profile to Firestore yet because rules enforce authorization.", err.message);
+                  console.warn("Could not sync profile to Firestore yet.", err.message);
                 });
               }
               return updated;
@@ -552,14 +572,15 @@ export default function App() {
   };
 
   // Personnel Mutations
-  const handleAddPersonnel = async (profile: Omit<UserProfile, 'uid'>) => {
+  const handleAddPersonnel = async (profile: Omit<UserProfile, 'uid'> & { password?: string }) => {
     const uid = 'user-' + Date.now();
-    const raw: UserProfile = {
+    const raw: UserProfile & { password?: string } = {
       ...profile,
-      uid
+      uid,
+      password: profile.password || 'panglimagym2026'
     };
     const updated = [...personnel, raw];
-    setPersonnel(updated);
+    setPersonnel(updated as any);
     localStorage.setItem('gymstock_personnel', JSON.stringify(updated));
 
     if (isFirebaseConfigured && db) {
@@ -571,12 +592,17 @@ export default function App() {
     }
   };
 
-  const handleModifyRole = async (uid: string, role: 'Admin' | 'Staff') => {
-    const updated = personnel.map(u => u.uid === uid ? { ...u, role } : u);
+  const handleUpdatePersonnel = async (uid: string, updates: Partial<UserProfile> & { password?: string }) => {
+    const updated = personnel.map(u => u.uid === uid ? { ...u, ...updates } : u);
     setPersonnel(updated);
     localStorage.setItem('gymstock_personnel', JSON.stringify(updated));
 
+    // Refreshes currently logged in session name and role if self modified
     const updatedUser = updated.find(u => u.uid === uid);
+    if (updatedUser && updatedUser.email === user?.email) {
+      setUser(prev => prev ? { ...prev, displayName: updatedUser.displayName || prev.displayName, role: updatedUser.role } : null);
+    }
+
     if (updatedUser && isFirebaseConfigured && db) {
       try {
         await setDoc(doc(db, 'userProfiles', uid), updatedUser);
@@ -664,12 +690,12 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'users' && (
+        {activeTab === 'users' && user?.role === 'Admin' && (
           <UserManagementView 
             currentUser={user} 
             users={personnel} 
             onAddUser={handleAddPersonnel} 
-            onModifyRole={handleModifyRole}
+            onUpdateUser={handleUpdatePersonnel}
             onDeleteUser={handleDeletePersonnel}
           />
         )}
