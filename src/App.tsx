@@ -159,7 +159,7 @@ export default function App() {
 
   // 4. Live Firebase Real-Time Synchronization Flow
   useEffect(() => {
-    if (!isFirebaseConfigured || !auth || !db || !user) return;
+    if (!isFirebaseConfigured || !auth || !db || !user || !auth.currentUser) return;
 
     const unsubscribes: (() => void)[] = [];
 
@@ -342,7 +342,7 @@ export default function App() {
     setLocalLogs(updatedLogs);
 
     // Synchronize to Cloud Firestore if connected
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && auth?.currentUser) {
       try {
         await setDoc(doc(db, 'gymItems', id), newItem);
       } catch (err) {
@@ -362,7 +362,7 @@ export default function App() {
     setItems(updated);
     setLocalItems(updated);
 
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && auth?.currentUser) {
       try {
         await setDoc(doc(db, 'gymItems', updatedItem.id), updatedItem);
       } catch (err) {
@@ -377,7 +377,7 @@ export default function App() {
     setItems(updated);
     setLocalItems(updated);
 
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && auth?.currentUser) {
       try {
         await deleteDoc(doc(db, 'gymItems', id));
       } catch (err) {
@@ -426,7 +426,7 @@ export default function App() {
     setLogs(updatedLogs);
     setLocalLogs(updatedLogs);
 
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && auth?.currentUser) {
       try {
         await setDoc(doc(db, 'gymItems', itemId), updatedItem);
       } catch (err) {
@@ -457,7 +457,7 @@ export default function App() {
     setMaintenance(updatedScheduleList);
     setLocalMaintenance(updatedScheduleList);
 
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && auth?.currentUser) {
       try {
         await setDoc(doc(db, 'maintenanceSchedule', maintId), updatedScheduler);
       } catch (err) {
@@ -495,7 +495,7 @@ export default function App() {
         setLogs(updatedLogsList);
         setLocalLogs(updatedLogsList);
 
-        if (isFirebaseConfigured && db) {
+        if (isFirebaseConfigured && db && auth?.currentUser) {
           try {
             await setDoc(doc(db, 'gymItems', targetItem.id), updatedItem);
           } catch (err) {
@@ -522,7 +522,7 @@ export default function App() {
     setMaintenance(updatedList);
     setLocalMaintenance(updatedList);
 
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && auth?.currentUser) {
       try {
         await setDoc(doc(db, 'maintenanceSchedule', newEntry.id), newEntry);
       } catch (err) {
@@ -542,7 +542,7 @@ export default function App() {
       setItems(updatedItems);
       setLocalItems(updatedItems);
 
-      if (isFirebaseConfigured && db) {
+      if (isFirebaseConfigured && db && auth?.currentUser) {
         try {
           await setDoc(doc(db, 'gymItems', targetItem.id), updatedItem);
         } catch (err) {
@@ -557,7 +557,7 @@ export default function App() {
     setLogs([]);
     setLocalLogs([]);
 
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && auth?.currentUser) {
       try {
         const snapshot = await getDocs(collection(db, 'stockLogs'));
         const batchPromises: Promise<void>[] = [];
@@ -583,7 +583,7 @@ export default function App() {
     setPersonnel(updated as any);
     localStorage.setItem('gymstock_personnel', JSON.stringify(updated));
 
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && auth?.currentUser) {
       try {
         await setDoc(doc(db, 'userProfiles', uid), raw);
       } catch (err) {
@@ -603,7 +603,7 @@ export default function App() {
       setUser(prev => prev ? { ...prev, displayName: updatedUser.displayName || prev.displayName, role: updatedUser.role } : null);
     }
 
-    if (updatedUser && isFirebaseConfigured && db) {
+    if (updatedUser && isFirebaseConfigured && db && auth?.currentUser) {
       try {
         await setDoc(doc(db, 'userProfiles', uid), updatedUser);
       } catch (err) {
@@ -617,7 +617,7 @@ export default function App() {
     setPersonnel(updated);
     localStorage.setItem('gymstock_personnel', JSON.stringify(updated));
 
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && auth?.currentUser) {
       try {
         await deleteDoc(doc(db, 'userProfiles', uid));
       } catch (err) {

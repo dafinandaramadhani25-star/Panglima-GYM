@@ -9,8 +9,8 @@ interface LoginViewProps {
 }
 
 export default function LoginView({ onLoginSuccess }: LoginViewProps) {
-  const [email, setEmail] = useState('dafinandaramadhani25@gmail.com');
-  const [password, setPassword] = useState('panglimagym2026');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -281,14 +281,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
           </button>
         </form>
 
-        {/* Demo Credentials Alert Helper */}
-        <div className="mt-6 p-3 rounded-lg bg-[#00C853]/5 border border-emerald-500/15 text-center text-[11px] text-gray-400">
-          <span className="text-emerald-400 font-mono font-bold flex items-center justify-center gap-1 mb-0.5">
-            <Sparkles className="w-3.5 h-3.5" /> TRIAL CREDENTIALS
-          </span>
-          Email: <span className="text-gray-300 font-mono">dafinandaramadhani25@gmail.com</span><br/>
-          Password: <span className="text-gray-300 font-mono">panglimagym2026</span>
-        </div>
+
       </motion.div>
     </div>
   );
