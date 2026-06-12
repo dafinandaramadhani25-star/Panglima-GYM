@@ -30,7 +30,7 @@ export default function Sidebar({ currentTab, onTabChange, user, onLogout }: Sid
   ];
 
   return (
-    <aside id="sidebar-container" className="w-64 bg-[#121212] border-r border-[#2A2A2A] flex flex-col justify-between shrink-0 h-screen sticky top-0">
+    <aside id="sidebar-container" className="hidden md:flex w-64 bg-[#121212] border-r border-[#2A2A2A] flex-col justify-between shrink-0 h-screen sticky top-0">
       {/* Brand Header */}
       <div className="p-6 border-b border-[#2A2A2A]">
         <div className="flex items-center gap-3">
